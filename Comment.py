@@ -24,7 +24,7 @@ body = template.format(CIRCLE_BUILD_NUM=CIRCLE_BUILD_NUM,
 
 g = Github(GITHUB_TOKEN)
 repo = g.get_repo("{user}/{repo}".format(user=CIRCLE_PROJECT_USERNAME, repo=CIRCLE_PROJECT_REPONAME))
-pr = repo.get_pull(PR_ID)
+pr = repo.get_pull(int(PR_ID))
 comments = pr.get_issue_comments()
 comment = None
 for c in comments:

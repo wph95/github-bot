@@ -2,10 +2,11 @@ from github import Github
 import datetime
 import os
 
-template = os.environ["TEMPLATE"]
+with open("/tmp/TEMPLATE") as f:
+    template = f.read()
+
 GITHUB_ID = os.environ["GITHUB_ID"]
 GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
-
 
 CIRCLE_BUILD_NUM = os.environ["CIRCLE_BUILD_NUM"]
 CIRCLE_SHA1 = os.environ["CIRCLE_SHA1"]
@@ -29,8 +30,7 @@ comments = pr.get_issue_comments()
 comment = None
 for c in comments:
     if "Create by Comment Bot" in c.body:
-        comment = c
-        break
+        c.delete()
 
 if comment is not None:
     comment.edit(body)

@@ -1,44 +1,51 @@
-from github import Github
-import datetime
 import os
+import requests
 
-with open("/tmp/TEMPLATE") as f:
-    template = f.read()
-
-GITHUB_ID = os.environ["GITHUB_ID"]
 GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
 
 CIRCLE_BUILD_NUM = os.environ["CIRCLE_BUILD_NUM"]
 CIRCLE_SHA1 = os.environ["CIRCLE_SHA1"]
 CIRCLE_PROJECT_REPONAME = os.environ["CIRCLE_PROJECT_REPONAME"]
 CIRCLE_PROJECT_USERNAME = os.environ["CIRCLE_PROJECT_USERNAME"]
-CIRCLE_PULL_REQUESTS = os.environ["CIRCLE_PULL_REQUESTS"]
-PR_ID = CIRCLE_PULL_REQUESTS.split("/")[-1]
+CIRCLE_PROJECT_ID = os.environ["CIRCLE_PROJECT_ID"]
 
-body = template.format(CIRCLE_BUILD_NUM=CIRCLE_BUILD_NUM,
-                       TIME=datetime.datetime.now().isoformat(),
-                       COMMIT=CIRCLE_SHA1,
-                       GITHUB_ID=GITHUB_ID,
-                       CIRCLE_PROJECT_USERNAME=CIRCLE_PROJECT_USERNAME,
-                       CIRCLE_PROJECT_REPONAME=CIRCLE_PROJECT_REPONAME,
-                       )
+CIRCLE_ROOT = "https://{CIRCLE_BUILD_NUM}-{CIRCLE_PROJECT_ID}-gh.circle-artifacts.com/0".format(
+    CIRCLE_BUILD_NUM=CIRCLE_BUILD_NUM,
+    CIRCLE_PROJECT_ID=CIRCLE_PROJECT_ID)
 
-g = Github(GITHUB_TOKEN)
-repo = g.get_repo("{user}/{repo}".format(user=CIRCLE_PROJECT_USERNAME, repo=CIRCLE_PROJECT_REPONAME))
-pr = repo.get_pull(int(PR_ID))
-comments = pr.get_issue_comments()
-comment = None
-for c in comments:
-    if "Create by Comment Bot" in c.body:
-        c.delete()
 
-if comment is not None:
-    comment.edit(body)
-    print("Edit Comment Successful")
-else:
-    pr.create_issue_comment(body)
-    print("Create Comment Successful")
+def create_deployment(env_name, description, env_url):
+    url = "https://api.github.com/repos/{CIRCLE_PROJECT_USERNAME}/{CIRCLE_PROJECT_REPONAME}/deployments".format(
+        CIRCLE_PROJECT_USERNAME=CIRCLE_PROJECT_USERNAME,
+        CIRCLE_PROJECT_REPONAME=CIRCLE_PROJECT_REPONAME
+    )
+    data = {"ref": CIRCLE_SHA1,
+            "environment": env_name,
+            "description": description,
+            "transient_environment": True,
+            "auto_merge": False,
+            "required_contexts": []}
+    req = requests.post(url, json=data, headers={
+        "Authorization": "bearer {}".format(GITHUB_TOKEN)
+    })
+    req.raise_for_status()
+    deployment = req.json()
 
-# pr.create_issue_comment(
-#     "Hello Just a Test :)"
-# )
+    url = "https://api.github.com/repos/{CIRCLE_PROJECT_USERNAME}/{CIRCLE_PROJECT_REPONAME}/deployments/{deployment_id}/statuses".format(
+        CIRCLE_PROJECT_USERNAME=CIRCLE_PROJECT_USERNAME,
+        CIRCLE_PROJECT_REPONAME=CIRCLE_PROJECT_REPONAME,
+        deployment_id=deployment["id"]
+    )
+    data = {"state": "success",
+            "environment": env_name,
+            "environment_url": env_url,
+            "log_url": "https://circleci.com/gh/dashbase/dashbase/{}".format(CIRCLE_BUILD_NUM),
+            }
+    req = requests.post(url, json=data, headers={
+        "Authorization": "bearer {}".format(GITHUB_TOKEN)
+    })
+    req.raise_for_status()
+
+
+create_deployment("ci-storybook", "auto create storybook", "{}/storybook/index.html".format(CIRCLE_ROOT))
+create_deployment("ci-static-page", "auto create ui page", "{}/index.html".format(CIRCLE_ROOT))
